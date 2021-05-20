@@ -45,6 +45,7 @@ if __name__ == "__main__":
     # websockets IP and PORT to listen for incoming messages
     IP = "localhost"
     PORT = 8081
+    print(f"Listening messages on => {IP}:{PORT}")
 
     # generate stream UID (participant unique identifier)
     UID = str(uuid.uuid4())
