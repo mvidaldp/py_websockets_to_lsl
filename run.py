@@ -15,7 +15,6 @@ async def on_connect(websocket, _):
             # Key pressed (M or C) => [timestamp, key, latency, correct/not]
             # End of task => [cnt_good, cnt_bad, perc_good, perc_bad, avg_RT]
             msg = json.loads(message)
-            print(f"Values received and sent => {msg}")
             event = msg["msg"]  # event type
             data = msg["value"]  # data read
             if event == "k":
