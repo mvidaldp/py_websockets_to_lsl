@@ -3,39 +3,41 @@ import json  # read/write JSON format
 import websockets  # sockets made easy and standard
 import uuid  # UIDs manipulation
 
-# import LSL's Stream Info and Outlet classes, data and sampling rate types
+# import LSL's Stream Info and Outlet classes, and sampling rate types
 from pylsl import StreamInfo, StreamOutlet, IRREGULAR_RATE
 
 
-async def on_connect(websocket, path):
+async def on_connect(websocket, _):
+    """Listen to messages using WebSockets and then stream them using LSL."""
     try:
         async for message in websocket:
-            # Message types and content:
+            # Message types (k for key, e for end) and content:
             # Key pressed (M or C) => [timestamp, key, latency, correct/not]
             # End of task => [cnt_good, cnt_bad, perc_good, perc_bad, avg_RT]
             msg = json.loads(message)
+            print(f"Values received and sent => {msg}")
             event = msg["msg"]  # event type
-            if event == "key":
-                # timestamp to send on all streams
-                timestamp = msg["value"][0]
-                # send key
-                key = str(msg["value"][1])
-                s_outlet_key.push([timestamp, key])
-                # send latency
-                latency = float(msg["value"][2])
-                s_outlet_lat.push([timestamp, latency])
+            data = msg["value"]  # data read
+            if event == "k":
+                # timestamp to send on all streams (UNIX epoch)
+                timestamp = data[0]
+                # send key (1/2)
+                key = int(data[1])
+                s_outlet_key.push_sample([timestamp, key])
+                # send latency in milliseconds
+                latency = int(data[2])
+                s_outlet_lat.push_sample([timestamp, latency])
                 # send correct/not (1/0)
-                correct = int(msg["value"][3])
-                s_outlet_cor.push([timestamp, correct])
-                # debugger
-                print(f"Values received and sent => {lsl_ready_msg}")
-            elif event == "end":
+                correct = int(data[3])
+                s_outlet_cor.push_sample([timestamp, correct])
+            elif event == "e":
                 # send end values
-                end_values = [float(v) for v in msg["value"]]
-                s_outlet_end.push(end_values)
+                end_values = [int(v) for v in data]
+                s_outlet_end.push_sample(end_values)
             else:
                 print(f"Unknown event: {event}")
-
+            # debugger
+            print(f"Values received and sent => {data}")
     finally:
         print("Connection lost.")
 
@@ -45,11 +47,9 @@ if __name__ == "__main__":
     # websockets IP and PORT to listen for incoming messages
     IP = "localhost"
     PORT = 8081
-    print(f"Listening messages on => {IP}:{PORT}")
 
     # generate stream UID (participant unique identifier)
     UID = str(uuid.uuid4())
-    print(f"Participant UID => {UID}")
 
     # instanciate StreamInfos - more info:
     # https://labstreaminglayer.readthedocs.io/projects/liblsl/ref/streaminfo.html
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         type="Markers",
         channel_count=2,
         nominal_srate=IRREGULAR_RATE,
-        channel_format="float32",
+        channel_format="int32",
         source_id=UID,
     )
     s_info_cor = StreamInfo(
@@ -86,7 +86,7 @@ if __name__ == "__main__":
         type="Markers",
         channel_count=5,
         nominal_srate=IRREGULAR_RATE,
-        channel_format="float32",
+        channel_format="int32",
         source_id=UID,
     )
 
@@ -98,6 +98,8 @@ if __name__ == "__main__":
     s_outlet_end = StreamOutlet(s_info_end)
 
     lsl_ready_msg = "LSL streams 'Key', 'Latency', 'Correct', and 'End' ready"
+    print(f"Listening messages on => {IP}:{PORT}")
+    print(f"Participant UID => {UID}")
     print(f"=> {lsl_ready_msg}")
 
     # Make sure IP and PORT match with Labvanced's study settings
