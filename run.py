@@ -8,35 +8,54 @@ from pylsl import StreamInfo, StreamOutlet, IRREGULAR_RATE
 
 
 async def on_connect(websocket, _):
-    """Listen to messages using WebSockets and then stream them using LSL."""
+    """Listen to messages using WebSockets and then stream them via LSL."""
     try:
         async for message in websocket:
             # Message types (k for key, e for end) and content:
             # Key pressed (M or C) => [timestamp, key, latency, correct/not]
-            # End of task => [cnt_good, cnt_bad, perc_good, perc_bad, avg_RT]
+            # End of task => [cnt_good, cnt_bad, perc_good, perc_bad, avg_rt]
             msg = json.loads(message)
             event = msg["msg"]  # event type
             data = msg["value"]  # data read
+            unknown = False
             if event == "k":
                 # timestamp to send on all streams (UNIX epoch)
-                timestamp = data[0]
+                timestamp = int(data[0])
                 # send key (1/2)
                 key = int(data[1])
-                s_outlet_key.push_sample([timestamp, key])
                 # send latency in milliseconds
                 latency = int(data[2])
-                s_outlet_lat.push_sample([timestamp, latency])
                 # send correct/not (1/0)
                 correct = int(data[3])
-                s_outlet_cor.push_sample([timestamp, correct])
+                # wrap key event values into an array
+                key_data = [timestamp, key, latency, correct]
+                # send them via LSL
+                s_outlet_key.push_sample(key_data)
             elif event == "e":
-                # send end values
-                end_values = [int(v) for v in data]
-                s_outlet_end.push_sample(end_values)
+                # number of correct answers
+                cnt_good = int(data[0])
+                # number of incorrect answers
+                cnt_bad = int(data[1])
+                # % of correct answers
+                perc_good = int(data[2])
+                # % of incorrect answers
+                perc_bad = int(data[3])
+                # avg reaction time in milliseconds
+                avg_rt = int(data[4])
+                # wrap end values into an array
+                end_data = [cnt_good, cnt_bad, perc_good, perc_bad, avg_rt]
+                # send them via LSL
+                s_outlet_end.push_sample(end_data)
             else:
+                # debug unknown event with keycode sent
+                unknown = True
                 print(f"Unknown event: {event}")
-            # debugger
-            print(f"Values received and sent => {data}")
+            if unknown:
+                event_name = "Unknown"
+            else:
+                event_name = "Key" if event == "k" else "End"
+            # debugg event with values sent
+            print(f"{event_name} event values received => {data}")
     finally:
         print("Connection lost.")
 
@@ -55,7 +74,7 @@ if __name__ == "__main__":
     s_info_key = StreamInfo(
         name="Key",  # name of the stream
         type="Markers",  # stream type (most usual)
-        channel_count=2,  # number of values to stream/send
+        channel_count=4,  # number of values to stream/send
         nominal_srate=IRREGULAR_RATE,  # sampling rate in Hz or IRREGULAR_RATE
         channel_format="int32",  # datatype: "float32", "int32", "string"...
         # pylsl importable primitive datatypes: 'cf_float32', 'cf_double64',
@@ -64,22 +83,12 @@ if __name__ == "__main__":
         # https://github.com/labstreaminglayer/liblsl-Python/blob/master/pylsl/pylsl.py#L52
         source_id=UID,  # unique identifier
     )
-    s_info_lat = StreamInfo(
-        name="Latency",
-        type="Markers",
-        channel_count=2,
-        nominal_srate=IRREGULAR_RATE,
-        channel_format="int32",
-        source_id=UID,
-    )
-    s_info_cor = StreamInfo(
-        name="Correct",
-        type="Markers",
-        channel_count=2,
-        nominal_srate=IRREGULAR_RATE,
-        channel_format="int32",
-        source_id=UID,
-    )
+    # add stream metadata (description of fields)
+    s_info_key.desc().append_child("Timestamp")
+    s_info_key.desc().append_child("Key")
+    s_info_key.desc().append_child("Latency")
+    s_info_key.desc().append_child("Correct")
+
     s_info_end = StreamInfo(
         name="End",
         type="Markers",
@@ -88,12 +97,15 @@ if __name__ == "__main__":
         channel_format="int32",
         source_id=UID,
     )
+    s_info_end.desc().append_child("Correct")
+    s_info_end.desc().append_child("NotCorrect")
+    s_info_end.desc().append_child("%Correct")
+    s_info_end.desc().append_child("%NotCorrect")
+    s_info_end.desc().append_child("MeanReactionTime")
 
     # instanciate StreamOutlets - more info:
     # https://labstreaminglayer.readthedocs.io/projects/liblsl/ref/outlet.html
     s_outlet_key = StreamOutlet(s_info_key)
-    s_outlet_lat = StreamOutlet(s_info_lat)
-    s_outlet_cor = StreamOutlet(s_info_cor)
     s_outlet_end = StreamOutlet(s_info_end)
 
     lsl_ready_msg = "LSL streams 'Key', 'Latency', 'Correct', and 'End' ready"
