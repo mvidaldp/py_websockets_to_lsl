@@ -57,7 +57,7 @@ if __name__ == "__main__":
         type="Markers",  # stream type (most usual)
         channel_count=2,  # number of values to stream/send
         nominal_srate=IRREGULAR_RATE,  # sampling rate in Hz or IRREGULAR_RATE
-        channel_format="string",  # datatype: "float32", "int32", "string"...
+        channel_format="int32",  # datatype: "float32", "int32", "string"...
         # pylsl importable primitive datatypes: 'cf_float32', 'cf_double64',
         # 'cf_string', 'cf_int32', 'cf_int16', 'cf_int8', 'cf_int64',
         # 'cf_undefined'. Source:
